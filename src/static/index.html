@@ -45,6 +45,96 @@
       <p>&copy; 2023 Mergington High School</p>
     </footer>
 
-    <script src="app.js"></script>
+    <script>
+      // Render activities with participants and wire up signup
+      (function () {
+        const activitiesListEl = document.getElementById('activities-list');
+        const activitySelectEl = document.getElementById('activity');
+        const formEl = document.getElementById('signup-form');
+        const messageEl = document.getElementById('message');
+
+        const showMessage = (text, type = 'info') => {
+          messageEl.className = `message ${type}`;
+          messageEl.textContent = text;
+          messageEl.classList.remove('hidden');
+          setTimeout(() => messageEl.classList.add('hidden'), 3500);
+        };
+
+        const escapeHtml = (s) =>
+          s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+        async function loadActivities() {
+          activitiesListEl.innerHTML = '<p>Loading activities...</p>';
+          try {
+            const res = await fetch('/activities');
+            const data = await res.json();
+
+            // Populate activity select
+            activitySelectEl.innerHTML = '<option value="">-- Select an activity --</option>';
+            Object.keys(data).forEach((name) => {
+              const opt = document.createElement('option');
+              opt.value = name;
+              opt.textContent = name;
+              activitySelectEl.appendChild(opt);
+            });
+
+            // Render cards
+            activitiesListEl.innerHTML = '';
+            Object.entries(data).forEach(([name, info]) => {
+              const card = document.createElement('div');
+              card.className = 'activity-card';
+              const participants = info.participants || [];
+              const participantsList = participants
+                .map((email) => `<li>${escapeHtml(email)}</li>`)
+                .join('');
+
+              card.innerHTML = `
+                <h4>${escapeHtml(name)}</h4>
+                <p>${escapeHtml(info.description)}</p>
+                <p><strong>Schedule:</strong> ${escapeHtml(info.schedule)}</p>
+                <p><strong>Capacity:</strong> ${participants.length}/${info.max_participants}</p>
+                <div class="participants">
+                  <h5>Participants</h5>
+                  ${
+                    participants.length
+                      ? `<ul class="participants-list">${participantsList}</ul>`
+                      : `<p class="participants-empty">Be the first to join!</p>`
+                  }
+                </div>
+              `;
+              activitiesListEl.appendChild(card);
+            });
+          } catch (e) {
+            activitiesListEl.innerHTML = '<p class="error message">Failed to load activities.</p>';
+          }
+        }
+
+        formEl.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const email = document.getElementById('email').value.trim();
+          const activity = activitySelectEl.value;
+          if (!email || !activity) return;
+
+          try {
+            const res = await fetch(
+              `/activities/${encodeURIComponent(activity)}/signup?email=${encodeURIComponent(email)}`,
+              { method: 'POST' }
+            );
+            if (!res.ok) {
+              const err = await res.json().catch(() => ({}));
+              throw new Error(err.detail || 'Signup failed');
+            }
+            showMessage(`Signed up ${email} for ${activity}`, 'success');
+            formEl.reset();
+            await loadActivities();
+          } catch (err) {
+            showMessage(err.message || 'Signup failed', 'error');
+          }
+        });
+
+        // Initial load
+        loadActivities();
+      })();
+    </script>
   </body>
 </html>
